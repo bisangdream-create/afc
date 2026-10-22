@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 맞춤 단어/한자 플래시카드</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+        }
+        /* 3D Flip Card Effect */
+        .perspective-1000 {
+            perspective: 1000px;
+        }
+        .transform-style-3d {
+            transform-style: preserve-3d;
+        }
+        .backface-hidden {
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+        }
+        .rotate-y-180 {
+            transform: rotateY(180deg);
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
+
+    <header class="bg-slate-800 border-b border-slate-700 py-4 px-6 shadow-md">
+        <div class="max-w-4xl mx-auto flex justify-between items-center flex-wrap gap-3">
+            <div class="flex items-center space-x-3">
+                <div class="bg-indigo-600 text-white p-2.5 rounded-xl shadow-lg">
+                    <i class="fa-solid fa-layer-group text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+                        AI 스마트 플래시카드
+                    </h1>
+                    <p class="text-xs text-slate-400">사진 업로드 기반 AI 단어장 학습기</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <button id="reset-all-btn" class="text-xs md:text-sm bg-slate-700 hover:bg-slate-600 active:bg-slate-500 text-slate-300 py-2 px-3.5 rounded-lg transition-colors flex items-center gap-1.5 shadow">
+                    <i class="fa-solid fa-rotate-left"></i> 처음부터 다시 (순서 섞기)
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-4xl mx-auto w-full flex-1 p-4 md:p-6 flex flex-col gap-6">
+
+        <!-- Image Upload Section -->
+        <section class="bg-slate-800 rounded-2xl p-5 border border-slate-700/80 shadow-xl">
+            <div class="flex flex-col md:flex-row gap-4 items-center justify-between">
+                <div class="w-full md:w-auto flex-1">
+                    <label class="block text-sm font-medium text-slate-300 mb-1.5">
+                        <i class="fa-solid fa-camera text-indigo-400 mr-1.5"></i>학습할 사진 업로드 (교재, 한자, 단어장 등)
+                    </label>
+                    <div class="flex gap-2">
+                        <input type="file" id="image-input" accept="image/*" class="hidden">
+                        <button id="upload-btn" class="flex-1 md:flex-initial bg-slate-700 hover:bg-slate-600 text-slate-200 border border-slate-600 px-4 py-2.5 rounded-xl text-sm transition font-medium flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-upload"></i> 사진 선택하기
+                        </button>
+                        <span id="file-name" class="text-xs text-slate-400 self-center truncate max-w-[180px]">선택된 파일 없음</span>
+                    </div>
+                </div>
+
+                <div class="flex w-full md:w-auto gap-2">
+                    <button id="analyze-btn" disabled class="w-full md:w-auto bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-medium px-6 py-2.5 rounded-xl transition shadow-lg flex items-center justify-center gap-2 text-sm cursor-pointer disabled:cursor-not-allowed">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> 카드로 변환
+                    </button>
+                </div>
+            </div>
+            <p class="text-xs text-slate-400 mt-2">
+                * 교재, 손글씨, 단어장 사진을 업로드하면 AI가 한자 및 영어 단어를 인식하여 플래시카드로 자동 변환합니다.
+            </p>
+        </section>
+
+        <!-- Notification / Toast UI -->
+        <div id="toast-message" class="hidden fixed bottom-6 right-6 bg-slate-800 border border-indigo-500 text-slate-100 text-sm px-4 py-3 rounded-xl shadow-2xl z-50 flex items-center gap-2 transition-all">
+            <i id="toast-icon" class="fa-solid fa-circle-info text-indigo-400"></i>
+            <span id="toast-text">알림 메세지</span>
+        </div>
+
+        <!-- Study & Flashcard Area -->
+        <section id="study-container" class="flex-1 flex flex-col items-center justify-center my-2 min-h-[380px]">
+            
+            <!-- Empty State -->
+            <div id="empty-state" class="text-center py-12 px-4">
+                <div class="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-500 border border-slate-700">
+                    <i class="fa-regular fa-images text-3xl"></i>
+                </div>
+                <h3 class="text-lg font-medium text-slate-300 mb-1">등록된 단어 카드가 없습니다</h3>
+                <p class="text-sm text-slate-500 max-w-xs mx-auto">상단에서 사진을 업로드하여 학습을 시작하세요!</p>
+            </div>
+
+            <!-- Loading State -->
+            <div id="loading-state" class="hidden text-center py-12">
+                <div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-indigo-500 border-t-transparent mb-4"></div>
+                <h3 class="text-lg font-medium text-indigo-300 mb-1">이미지 분석 중...</h3>
+                <p class="text-xs text-slate-400">사진 속 한자 및 영어 단어를 추출하여 카드를 생성하고 있습니다.</p>
+            </div>
+
+            <!-- Active Card Container -->
+            <div id="card-wrapper" class="hidden w-full max-w-md flex flex-col items-center gap-4">
+                
+                <!-- Filter Bar & Options -->
+                <div class="w-full flex justify-between items-center px-1 text-sm text-slate-400">
+                    <div class="flex items-center gap-2">
+                        <span id="card-counter" class="font-semibold text-indigo-400">0 / 0</span>
+                        <span id="filter-badge" class="hidden text-xs bg-rose-500/20 text-rose-300 px-2 py-0.5 rounded-full border border-rose-500/30">
+                            체크한 카드만 보는 중
+                        </span>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <!-- Swap Sides Toggle Button -->
+                        <button id="swap-sides-btn" class="text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-3 py-1.5 rounded-lg transition flex items-center gap-1.5" title="앞면과 뒷면 내용을 서로 바꿉니다">
+                            <i class="fa-solid fa-right-left text-amber-400"></i> <span id="swap-btn-text">앞/뒷면 반대로</span>
+                        </button>
+
+                        <!-- Bookmark Filter Button -->
+                        <button id="toggle-filter-btn" class="text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-3 py-1.5 rounded-lg transition flex items-center gap-1.5">
+                            <i class="fa-solid fa-bookmark text-rose-400"></i> <span id="filter-btn-text">모르는 카드만 (0)</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 3D Card Box -->
+                <div id="flashcard" class="w-full h-80 perspective-1000 cursor-pointer">
+                    <div id="card-inner" class="relative w-full h-full transform-style-3d transition-transform duration-500 rounded-2xl shadow-2xl">
+                        
+                        <!-- Front View -->
+                        <div class="absolute inset-0 w-full h-full backface-hidden bg-gradient-to-br from-slate-800 to-slate-850 border-2 border-slate-700/80 rounded-2xl p-6 flex flex-col justify-between items-center">
+                            <div class="w-full flex justify-between items-center text-slate-400 text-xs">
+                                <span><i class="fa-solid fa-rotate-right mr-1"></i>클릭해서 확인</span>
+                                <button id="bookmark-btn" title="모르는 단어로 체크" class="text-xl p-1 text-slate-600 hover:text-rose-500 transition-colors">
+                                    <i class="fa-solid fa-bookmark"></i>
+                                </button>
+                            </div>
+                            <div class="text-center my-auto flex flex-col items-center justify-center">
+                                <h2 id="card-front-main" class="text-4xl md:text-5xl font-bold text-white tracking-wide mb-2 break-all">---</h2>
+                                <p id="card-front-sub" class="text-sm text-indigo-300 font-medium">---</p>
+                            </div>
+                            <div id="card-front-label" class="text-xs text-slate-500">앞면 (문제/단어)</div>
+                        </div>
+
+                        <!-- Back View -->
+                        <div class="absolute inset-0 w-full h-full backface-hidden rotate-y-180 bg-gradient-to-br from-indigo-950/90 to-slate-900 border-2 border-indigo-500/50 rounded-2xl p-6 flex flex-col justify-between items-center">
+                            <div class="w-full flex justify-between items-center text-slate-400 text-xs">
+                                <span><i class="fa-solid fa-rotate-right mr-1"></i>클릭해서 문제 확인</span>
+                                <span class="text-indigo-400 font-semibold">정답 / 풀이</span>
+                            </div>
+                            <div class="text-center my-auto flex flex-col items-center justify-center">
+                                <h3 id="card-back-main" class="text-2xl md:text-3xl font-bold text-white mb-2 break-all">---</h3>
+                                <p id="card-back-sub" class="text-sm text-indigo-300 font-medium mb-1">---</p>
+                                <p id="card-back-example" class="text-xs text-slate-400 max-w-xs line-clamp-3 mt-1">---</p>
+                            </div>
+                            <div id="card-back-label" class="text-xs text-slate-500">뒷면 (뜻/의미)</div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- Card Navigation Controls -->
+                <div class="flex items-center gap-4 mt-2 w-full justify-center">
+                    <button id="prev-btn" class="w-12 h-12 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-full flex items-center justify-center text-slate-200 transition shadow-lg disabled:opacity-40 disabled:cursor-not-allowed">
+                        <i class="fa-solid fa-arrow-left"></i>
+                    </button>
+                    <button id="flip-btn" class="flex-1 max-w-[160px] py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-medium text-sm rounded-xl transition shadow-lg flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-repeat"></i> 뒤집기
+                    </button>
+                    <button id="next-btn" class="w-12 h-12 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-full flex items-center justify-center text-slate-200 transition shadow-lg disabled:opacity-40 disabled:cursor-not-allowed">
+                        <i class="fa-solid fa-arrow-right"></i>
+                    </button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // App State
+        let currentCards = [];
+        let filteredIndices = [];
+        let currentIndex = 0;
+        let isFlipped = false;
+        let isFilterBookmarkedOnly = false;
+        let isSideSwapped = false;
+        let selectedFileBase64 = null;
+
+        // DOM Elements
+        const imageInput = document.getElementById('image-input');
+        const uploadBtn = document.getElementById('upload-btn');
+        const fileNameDisplay = document.getElementById('file-name');
+        const analyzeBtn = document.getElementById('analyze-btn');
+
+        const emptyState = document.getElementById('empty-state');
+        const loadingState = document.getElementById('loading-state');
+        const cardWrapper = document.getElementById('card-wrapper');
+
+        const flashcard = document.getElementById('flashcard');
+        const cardInner = document.getElementById('card-inner');
+        const cardFrontMain = document.getElementById('card-front-main');
+        const cardFrontSub = document.getElementById('card-front-sub');
+        const cardFrontLabel = document.getElementById('card-front-label');
+        const cardBackMain = document.getElementById('card-back-main');
+        const cardBackSub = document.getElementById('card-back-sub');
+        const cardBackExample = document.getElementById('card-back-example');
+        const cardBackLabel = document.getElementById('card-back-label');
+        const bookmarkBtn = document.getElementById('bookmark-btn');
+
+        const prevBtn = document.getElementById('prev-btn');
+        const nextBtn = document.getElementById('next-btn');
+        const flipBtn = document.getElementById('flip-btn');
+        const resetAllBtn = document.getElementById('reset-all-btn');
+
+        const cardCounter = document.getElementById('card-counter');
+        const toggleFilterBtn = document.getElementById('toggle-filter-btn');
+        const filterBtnText = document.getElementById('filter-btn-text');
+        const filterBadge = document.getElementById('filter-badge');
+        const swapSidesBtn = document.getElementById('swap-sides-btn');
+        const swapBtnText = document.getElementById('swap-btn-text');
+
+        const toastMessage = document.getElementById('toast-message');
+        const toastIcon = document.getElementById('toast-icon');
+        const toastText = document.getElementById('toast-text');
+        let toastTimeout = null;
+
+        // Toast notification utility
+        function showToast(message, type = 'info') {
+            if (!toastMessage || !toastText || !toastIcon) return;
+
+            toastText.textContent = message;
+
+            // Reset icon classes
+            toastIcon.className = 'fa-solid ';
+            if (type === 'success') {
+                toastIcon.classList.add('fa-circle-check', 'text-emerald-400');
+                toastMessage.className = 'fixed bottom-6 right-6 bg-slate-800 border border-emerald-500 text-slate-100 text-sm px-4 py-3 rounded-xl shadow-2xl z-50 flex items-center gap-2 transition-all';
+            } else if (type === 'warning') {
+                toastIcon.classList.add('fa-triangle-exclamation', 'text-amber-400');
+                toastMessage.className = 'fixed bottom-6 right-6 bg-slate-800 border border-amber-500 text-slate-100 text-sm px-4 py-3 rounded-xl shadow-2xl z-50 flex items-center gap-2 transition-all';
+            } else {
+                toastIcon.classList.add('fa-circle-info', 'text-indigo-400');
+                toastMessage.className = 'fixed bottom-6 right-6 bg-slate-800 border border-indigo-500 text-slate-100 text-sm px-4 py-3 rounded-xl shadow-2xl z-50 flex items-center gap-2 transition-all';
+            }
+
+            toastMessage.classList.remove('hidden');
+
+            if (toastTimeout) clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toastMessage.classList.add('hidden');
+            }, 3000);
+        }
+
+        // File Selection Listener
+        uploadBtn.addEventListener('click', () => imageInput.click());
+
+        imageInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                fileNameDisplay.textContent = file.name;
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    selectedFileBase64 = evt.target.result.split(',')[1];
+                    analyzeBtn.disabled = false;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        analyzeBtn.addEventListener('click', analyzeImageAndCreateCards);
+
+        flashcard.addEventListener('click', toggleCardFlip);
+        flipBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleCardFlip();
+        });
+
+        prevBtn.addEventListener('click', () => navigateCard(-1));
+        nextBtn.addEventListener('click', () => navigateCard(1));
+
+        bookmarkBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleBookmark();
+        });
+
+        toggleFilterBtn.addEventListener('click', toggleBookmarkFilter);
+        swapSidesBtn.addEventListener('click', toggleSwapSides);
+        resetAllBtn.addEventListener('click', resetAndShuffle);
+
+        async function analyzeImageAndCreateCards() {
+            if (!selectedFileBase64) return;
+
+            showLoadingState();
+
+            const prompt = `Analyze this image containing Chinese characters (Hanzi/Kanji) or English vocabulary words.
+Extract each character or vocabulary word from the image and generate flashcard data.
+
+STRICT INSTRUCTIONS FOR CONTENT FORMATTING:
+1. "term": The word or character itself (e.g. "學" or "apple").
+2. "type": Specify "hanzi" if it is a Chinese character, or "english" if it is an English word.
+3. "reading":
+   - For English words: Provide ONLY the IPA pronunciation symbol (e.g., "/ˈæp.əl/"). DO NOT write Korean phonetic readings.
+   - For Chinese characters: Leave "reading" EMPTY ("") because character pronunciation/meaning belongs on the back of the card.
+4. "meaning": Korean meaning/definition (e.g., "사과" or "배울 학").
+5. "example": Optional simple usage example or additional notes in Korean.
+
+Format response ONLY as valid JSON matching this schema:
+[
+  {
+    "term": "단어 또는 한자",
+    "type": "hanzi 또는 english",
+    "reading": "영어일 때는 발음기호만 (예: /ˈæp.əl/). 한자일 때는 빈 문자열 \"\"",
+    "meaning": "한글 뜻 (한자의 경우 훈/음 표기 포함, 예: 배울 학)",
+    "example": "예문 또는 부가설명"
+  }
+]`;
+
+            const apiKey = "";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+            const payload = {
+                contents: [{
+                    role: "user",
+                    parts: [
+                        { text: prompt },
+                        {
+                            inlineData: {
+                                mimeType: "image/png",
+                                data: selectedFileBase64
+                            }
+                        }
+                    ]
+                }],
+                generationConfig: {
+                    responseMimeType: "application/json"
+                }
+            };
+
+            try {
+                const response = await fetchWithRetry(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`서버 응답 오류 (${response.status})`);
+                }
+
+                const data = await response.json();
+                const jsonText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                if (jsonText) {
+                    const parsedCards = JSON.parse(jsonText);
+                    currentCards = parsedCards.map(item => ({
+                        ...item,
+                        bookmarked: false
+                    }));
+
+                    if (currentCards.length > 0) {
+                        currentIndex = 0;
+                        isFilterBookmarkedOnly = false;
+                        shuffleArray(currentCards);
+                        updateFilteredIndices();
+                        renderCurrentCard();
+                        showCardState();
+                        showToast(`${currentCards.length}개의 단어가 카드로 생성되었습니다!`, 'success');
+                    } else {
+                        showToast('이미지에서 단어를 인식하지 못했습니다. 더 선명한 사진을 사용해 주세요.', 'warning');
+                        showEmptyState();
+                    }
+                } else {
+                    throw new Error('No valid response from model');
+                }
+            } catch (error) {
+                console.error('API Error:', error);
+                showToast(error.message || '이미지 분석 중 오류가 발생했습니다.', 'warning');
+                showEmptyState();
+            }
+        }
+
+        async function fetchWithRetry(url, options, retries = 3, backoff = 1000) {
+            try {
+                const res = await fetch(url, options);
+                if (!res.ok && res.status === 429 && retries > 0) {
+                    await new Promise(r => setTimeout(r, backoff));
+                    return fetchWithRetry(url, options, retries - 1, backoff * 2);
+                }
+                return res;
+            } catch (err) {
+                if (retries > 0) {
+                    await new Promise(r => setTimeout(r, backoff));
+                    return fetchWithRetry(url, options, retries - 1, backoff * 2);
+                }
+                throw err;
+            }
+        }
+
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+
+        function resetAndShuffle() {
+            if (currentCards.length === 0) {
+                showToast('카드 목록이 비어있습니다.', 'warning');
+                return;
+            }
+
+            shuffleArray(currentCards);
+            currentCards.forEach(c => c.bookmarked = false);
+            isFilterBookmarkedOnly = false;
+            currentIndex = 0;
+
+            resetFlipStateSilently();
+            updateFilteredIndices();
+            renderCurrentCard();
+
+            showToast('카드가 랜덤으로 섞였으며, 처음부터 다시 시작합니다.', 'info');
+        }
+
+        function updateFilteredIndices() {
+            if (isFilterBookmarkedOnly) {
+                filteredIndices = currentCards
+                    .map((card, idx) => card.bookmarked ? idx : null)
+                    .filter(idx => idx !== null);
+            } else {
+                filteredIndices = currentCards.map((_, idx) => idx);
+            }
+        }
+
+        function resetFlipStateSilently() {
+            isFlipped = false;
+            cardInner.classList.remove('rotate-y-180');
+        }
+
+        function renderCurrentCard() {
+            if (filteredIndices.length === 0) {
+                if (isFilterBookmarkedOnly) {
+                    showToast('체크된 모르는 카드가 없습니다. 전체 카드로 돌아갑니다.', 'info');
+                    isFilterBookmarkedOnly = false;
+                    updateFilteredIndices();
+                } else {
+                    showEmptyState();
+                    return;
+                }
+            }
+
+            if (currentIndex >= filteredIndices.length) {
+                currentIndex = 0;
+            }
+
+            const activeCardIndex = filteredIndices[currentIndex];
+            const cardData = currentCards[activeCardIndex];
+
+            const termText = cardData.term || '';
+            const readingText = cardData.reading || '';
+            const meaningText = cardData.meaning || '';
+            const exampleText = cardData.example || '';
+
+            if (!isSideSwapped) {
+                cardFrontMain.textContent = termText;
+                cardFrontSub.textContent = readingText;
+                cardFrontLabel.textContent = '앞면 (단어/한자)';
+
+                cardBackMain.textContent = meaningText;
+                cardBackSub.textContent = ''; 
+                cardBackExample.textContent = exampleText ? `예문: ${exampleText}` : '';
+                cardBackLabel.textContent = '뒷면 (뜻/설명)';
+            } else {
+                cardFrontMain.textContent = meaningText;
+                cardFrontSub.textContent = '';
+                cardFrontLabel.textContent = '앞면 (뜻/의미)';
+
+                cardBackMain.textContent = termText;
+                cardBackSub.textContent = readingText;
+                cardBackExample.textContent = exampleText ? `예문: ${exampleText}` : '';
+                cardBackLabel.textContent = '뒷면 (정답/단어)';
+            }
+
+            if (cardData.bookmarked) {
+                bookmarkBtn.classList.remove('text-slate-600');
+                bookmarkBtn.classList.add('text-rose-500');
+            } else {
+                bookmarkBtn.classList.remove('text-rose-500');
+                bookmarkBtn.classList.add('text-slate-600');
+            }
+
+            updateUIStats();
+        }
+
+        function toggleCardFlip() {
+            if (filteredIndices.length === 0) return;
+            isFlipped = !isFlipped;
+            cardInner.classList.toggle('rotate-y-180', isFlipped);
+        }
+
+        function navigateCard(direction) {
+            if (filteredIndices.length <= 1) return;
+
+            resetFlipStateSilently();
+
+            setTimeout(() => {
+                currentIndex = (currentIndex + direction + filteredIndices.length) % filteredIndices.length;
+                renderCurrentCard();
+            }, 150);
+        }
+
+        function toggleBookmark() {
+            if (filteredIndices.length === 0) return;
+            const activeCardIndex = filteredIndices[currentIndex];
+            currentCards[activeCardIndex].bookmarked = !currentCards[activeCardIndex].bookmarked;
+
+            updateFilteredIndices();
+
+            if (isFilterBookmarkedOnly && !currentCards[activeCardIndex].bookmarked) {
+                if (filteredIndices.length === 0) {
+                    isFilterBookmarkedOnly = false;
+                    updateFilteredIndices();
+                } else if (currentIndex >= filteredIndices.length) {
+                    currentIndex = 0;
+                }
+            }
+
+            renderCurrentCard();
+        }
+
+        function toggleBookmarkFilter() {
+            const bookmarkedCount = currentCards.filter(c => c.bookmarked).length;
+            if (!isFilterBookmarkedOnly && bookmarkedCount === 0) {
+                showToast('모르는 카드로 체크(북마크)된 항목이 없습니다.', 'warning');
+                return;
+            }
+
+            resetFlipStateSilently();
+            isFilterBookmarkedOnly = !isFilterBookmarkedOnly;
+            currentIndex = 0;
+            updateFilteredIndices();
+            renderCurrentCard();
+        }
+
+        function toggleSwapSides() {
+            if (currentCards.length === 0) return;
+            isSideSwapped = !isSideSwapped;
+            
+            resetFlipStateSilently();
+
+            if (isSideSwapped) {
+                swapBtnText.textContent = '원래대로 보기';
+                swapSidesBtn.classList.add('border-amber-500/50', 'bg-amber-500/10');
+                showToast('뜻/의미를 먼저 보는 모드로 전환되었습니다.', 'info');
+            } else {
+                swapBtnText.textContent = '앞/뒷면 반대로';
+                swapSidesBtn.classList.remove('border-amber-500/50', 'bg-amber-500/10');
+                showToast('단어/한자를 먼저 보는 모드로 전환되었습니다.', 'info');
+            }
+
+            renderCurrentCard();
+        }
+
+        function updateUIStats() {
+            const total = currentCards.length;
+            const bookmarkedCount = currentCards.filter(c => c.bookmarked).length;
+
+            if (isFilterBookmarkedOnly) {
+                cardCounter.textContent = `${currentIndex + 1} / ${filteredIndices.length} (전체 ${total})`;
+                filterBadge.classList.remove('hidden');
+            } else {
+                cardCounter.textContent = `${currentIndex + 1} / ${total}`;
+                filterBadge.classList.add('hidden');
+            }
+
+            filterBtnText.textContent = `모르는 카드만 (${bookmarkedCount})`;
+
+            prevBtn.disabled = filteredIndices.length <= 1;
+            nextBtn.disabled = filteredIndices.length <= 1;
+        }
+
+        function showLoadingState() {
+            emptyState.classList.add('hidden');
+            cardWrapper.classList.add('hidden');
+            loadingState.classList.remove('hidden');
+        }
+
+        function showCardState() {
+            loadingState.classList.add('hidden');
+            emptyState.classList.add('hidden');
+            cardWrapper.classList.remove('hidden');
+        }
+
+        function showEmptyState() {
+            loadingState.classList.add('hidden');
+            cardWrapper.classList.add('hidden');
+            emptyState.classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
